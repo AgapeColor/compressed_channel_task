@@ -1,7 +1,6 @@
 #include "producer.hpp"
 
 #include <iostream>
-#include <cstring>
 #include <thread>
 #include <exception>
 #include <stdexcept>
@@ -26,13 +25,16 @@ Producer::Producer(const std::string& inputPath)
 void Producer::run() {
     auto& channel = memory_.channel();
 
-    const char* messages[] = {"Hello", "from", "producer"};
+    while (true) {
+        input_.read(reinterpret_cast<char*>(channel.data), sizeof(channel.data));
 
-    for (const char* message : messages) {
-        const auto length = std::strlen(message);
+        const auto bytesRead = input_.gcount();
 
-        std::memcpy(channel.data, message, length);
-        channel.size = static_cast<std::uint32_t>(length);
+        if (bytesRead == 0) {
+            break;
+        }
+
+        channel.size = static_cast<std::uint32_t>(bytesRead);
         channel.state.store(ChannelState::Ready, std::memory_order_release);
 
         while (channel.state.load(std::memory_order_acquire) != ChannelState::Empty) {
@@ -40,10 +42,16 @@ void Producer::run() {
         }
     }
 
+    const bool readFailed = input_.bad() || (input_.fail() && !input_.eof());
+
     channel.state.store(ChannelState::Finished, std::memory_order_release);
 
     while (channel.state.load(std::memory_order_acquire) != ChannelState::Empty) {
         std::this_thread::yield();
+    }
+
+    if (readFailed) {
+        throw std::runtime_error("Error reading input file");
     }
 }
 
