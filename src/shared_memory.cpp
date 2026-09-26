@@ -1,11 +1,11 @@
 #include "shared_memory.hpp"
 
-#include <sys/mman.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <system_error>
 #include <cerrno>
+#include <fcntl.h>
 #include <new>
+#include <sys/mman.h>
+#include <system_error>
+#include <unistd.h>
 
 SharedMemory::SharedMemory(const std::string& name, Mode mode)
     : name_(name) {

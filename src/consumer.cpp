@@ -2,8 +2,8 @@
 
 #include <exception>
 #include <iostream>
-#include <thread>
 #include <stdexcept>
+#include <thread>
 
 Consumer::Consumer(const std::string& outputPath)
     : memory_("/compressed_channel", SharedMemory::Mode::Open),

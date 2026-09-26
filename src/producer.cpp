@@ -1,9 +1,9 @@
 #include "producer.hpp"
 
-#include <iostream>
-#include <thread>
 #include <exception>
+#include <iostream>
 #include <stdexcept>
+#include <thread>
 
 namespace {
     std::ifstream openInputFile(const std::string& path) {
