@@ -3,10 +3,10 @@
 #include <exception>
 #include <iostream>
 #include <stdexcept>
-#include <thread>
+#include <vector>
 
 Consumer::Consumer(const std::string& outputPath)
-    : memory_("/compressed_channel", SharedMemory::Mode::Open),
+    : memory_("/compressed_channel", SharedMemoryChannel::Mode::Open),
       output_(outputPath, std::ios::binary | std::ios::trunc)
 {
     if (!output_.is_open()) {
@@ -15,35 +15,29 @@ Consumer::Consumer(const std::string& outputPath)
 }
 
 void Consumer::run() {
-    auto& channel = memory_.channel();
+    std::vector<std::byte> buffer(memory_.payloadCapacity());
 
     while (true) {
-        const auto state = channel.state.load(std::memory_order_acquire);
+        const auto bytesReceived =
+            memory_.receive(buffer.data(), buffer.size());
 
-        if (state == ChannelState::Finished) {
+        if (!bytesReceived.has_value()) {
             break;
         }
 
-        if (state != ChannelState::Ready) {
-            std::this_thread::yield();
-            continue;
-        }
-
         output_.write(
-            reinterpret_cast<const char*>(channel.data),
-            static_cast<std::streamsize>(channel.size)
+            reinterpret_cast<const char*>(buffer.data()),
+            static_cast<std::streamsize>(*bytesReceived)
         );
-
-        channel.state.store(ChannelState::Empty, std::memory_order_release);
     }
 
     output_.flush();
     const bool writeFailed = !output_;
 
-    channel.state.store(ChannelState::Empty, std::memory_order_release);
+    memory_.acknowledgeFinished();
 
     if (writeFailed) {
-        throw std::runtime_error("Error writing output file");
+        throw std::runtime_error("Consumer::run(): error writing output file");
     }
 }
 

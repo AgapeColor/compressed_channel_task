@@ -1,6 +1,6 @@
 #pragma once
 
-#include "shared_memory.hpp"
+#include "shared_memory_channel.hpp"
 
 #include <fstream>
 #include <string>
@@ -12,6 +12,6 @@ public:
     void run();
 
 private:
-    SharedMemory memory_;
+    SharedMemoryChannel memory_;
     std::ofstream output_;
 };

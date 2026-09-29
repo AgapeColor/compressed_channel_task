@@ -10,12 +10,12 @@ find_package(Threads REQUIRED)
 
 add_executable(producer 
     src/producer.cpp
-    src/shared_memory.cpp
+    src/shared_memory_channel.cpp
 )
 
 add_executable(consumer 
     src/consumer.cpp
-    src/shared_memory.cpp
+    src/shared_memory_channel.cpp
 )
 
 foreach(target IN ITEMS producer consumer)

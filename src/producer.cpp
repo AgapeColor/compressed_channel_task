@@ -3,7 +3,7 @@
 #include <exception>
 #include <iostream>
 #include <stdexcept>
-#include <thread>
+#include <vector>
 
 namespace {
     std::ifstream openInputFile(const std::string& path) {
@@ -19,39 +19,34 @@ namespace {
 
 Producer::Producer(const std::string& inputPath)
     : input_(openInputFile(inputPath)),
-      memory_("/compressed_channel", SharedMemory::Mode::Create)
+      memory_("/compressed_channel", SharedMemoryChannel::Mode::Create)
 {}
 
 void Producer::run() {
-    auto& channel = memory_.channel();
+    std::vector<std::byte> buffer(memory_.payloadCapacity());
 
     while (true) {
-        input_.read(reinterpret_cast<char*>(channel.data), sizeof(channel.data));
+        input_.read(
+            reinterpret_cast<char*>(buffer.data()),
+            static_cast<std::streamsize>(buffer.size())
+        );
 
         const auto bytesRead = input_.gcount();
-
         if (bytesRead == 0) {
             break;
         }
 
-        channel.size = static_cast<std::uint32_t>(bytesRead);
-        channel.state.store(ChannelState::Ready, std::memory_order_release);
-
-        while (channel.state.load(std::memory_order_acquire) != ChannelState::Empty) {
-            std::this_thread::yield();
-        }
+        memory_.send(
+            buffer.data(),
+            static_cast<std::size_t>(bytesRead)
+        );
     }
 
     const bool readFailed = input_.bad() || (input_.fail() && !input_.eof());
 
-    channel.state.store(ChannelState::Finished, std::memory_order_release);
-
-    while (channel.state.load(std::memory_order_acquire) != ChannelState::Empty) {
-        std::this_thread::yield();
-    }
-
+    memory_.finish();
     if (readFailed) {
-        throw std::runtime_error("Error reading input file");
+        throw std::runtime_error("Producer::run(): error reading input file");
     }
 }
 
