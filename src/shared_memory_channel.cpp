@@ -10,8 +10,7 @@
 #include <thread>
 #include <unistd.h>
 
-SharedMemoryChannel::SharedMemoryChannel(const std::string& name, Mode mode)
-    : name_(name) {
+SharedMemoryChannel::SharedMemoryChannel(const std::string& name, Mode mode) : name_(name) {
     try {
         int flags = O_RDWR;
         if (mode == Mode::Create) {
@@ -29,14 +28,8 @@ SharedMemoryChannel::SharedMemoryChannel(const std::string& name, Mode mode)
             throw std::system_error(errno, std::generic_category(), "ftruncate");
         }
 
-        void* memory = mmap(
-            nullptr,
-            sizeof(SharedChannel),
-            PROT_READ | PROT_WRITE,
-            MAP_SHARED,
-            fd_,
-            0
-        );
+        void* memory =
+            mmap(nullptr, sizeof(SharedChannel), PROT_READ | PROT_WRITE, MAP_SHARED, fd_, 0);
 
         if (memory == MAP_FAILED) {
             throw std::system_error(errno, std::generic_category(), "mmap");
@@ -52,23 +45,17 @@ SharedMemoryChannel::SharedMemoryChannel(const std::string& name, Mode mode)
     }
 }
 
-SharedMemoryChannel::~SharedMemoryChannel() {
-    cleanup();
-}
+SharedMemoryChannel::~SharedMemoryChannel() { cleanup(); }
 
-std::size_t SharedMemoryChannel::payloadCapacity() const noexcept {
-    return sizeof(channel_->data);
-}
+std::size_t SharedMemoryChannel::payloadCapacity() const noexcept { return sizeof(channel_->data); }
 
 void SharedMemoryChannel::send(const std::byte* data, std::size_t size) {
     if (data == nullptr) {
-        throw std::invalid_argument(
-            "SharedMemoryChannel::send(): data must not be null");
+        throw std::invalid_argument("SharedMemoryChannel::send(): data must not be null");
     }
 
     if (size == 0 || size > payloadCapacity()) {
-        throw std::length_error(
-            "SharedMemoryChannel::send(): payload size is invalid");
+        throw std::length_error("SharedMemoryChannel::send(): payload size is invalid");
     }
 
     while (channel_->state.load(std::memory_order_acquire) != ChannelState::Empty) {
@@ -81,15 +68,14 @@ void SharedMemoryChannel::send(const std::byte* data, std::size_t size) {
     channel_->state.store(ChannelState::Ready, std::memory_order_release);
 }
 
-std::optional<std::size_t> SharedMemoryChannel::receive(std::byte* destination, std::size_t capacity) {
+std::optional<std::size_t> SharedMemoryChannel::receive(std::byte* destination,
+                                                        std::size_t capacity) {
     if (destination == nullptr) {
-        throw std::invalid_argument(
-            "SharedMemoryChannel::receive(): destination must not be null");
+        throw std::invalid_argument("SharedMemoryChannel::receive(): destination must not be null");
     }
 
     if (capacity < payloadCapacity()) {
-        throw std::length_error(
-            "SharedMemoryChannel::receive(): destination buffer is too small");
+        throw std::length_error("SharedMemoryChannel::receive(): destination buffer is too small");
     }
 
     while (true) {
@@ -103,15 +89,14 @@ std::optional<std::size_t> SharedMemoryChannel::receive(std::byte* destination, 
             std::this_thread::yield();
             continue;
         }
-        
+
         break;
     }
 
     const auto size = static_cast<std::size_t>(channel_->size);
 
     if (size == 0 || size > payloadCapacity()) {
-        throw std::runtime_error(
-            "SharedMemoryChannel::receive(): invalid payload size");
+        throw std::runtime_error("SharedMemoryChannel::receive(): invalid payload size");
     }
 
     std::memcpy(destination, channel_->data, size);
@@ -122,23 +107,19 @@ std::optional<std::size_t> SharedMemoryChannel::receive(std::byte* destination, 
 }
 
 void SharedMemoryChannel::finish() {
-    while (channel_->state.load(std::memory_order_acquire)
-           != ChannelState::Empty) {
+    while (channel_->state.load(std::memory_order_acquire) != ChannelState::Empty) {
         std::this_thread::yield();
     }
 
-    channel_->state.store(
-        ChannelState::Finished, std::memory_order_release);
+    channel_->state.store(ChannelState::Finished, std::memory_order_release);
 
-    while (channel_->state.load(std::memory_order_acquire)
-           != ChannelState::Empty) {
+    while (channel_->state.load(std::memory_order_acquire) != ChannelState::Empty) {
         std::this_thread::yield();
     }
 }
 
 void SharedMemoryChannel::acknowledgeFinished() {
-    channel_->state.store(
-        ChannelState::Empty, std::memory_order_release);
+    channel_->state.store(ChannelState::Empty, std::memory_order_release);
 }
 
 void SharedMemoryChannel::cleanup() noexcept {

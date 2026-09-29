@@ -6,12 +6,12 @@
 #include <string>
 
 class Consumer {
-public:
+  public:
     explicit Consumer(const std::string& outputPath);
 
     void run();
 
-private:
+  private:
     SharedMemoryChannel memory_;
     std::ofstream output_;
 };

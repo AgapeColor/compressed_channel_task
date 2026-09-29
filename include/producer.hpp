@@ -6,12 +6,12 @@
 #include <string>
 
 class Producer {
-public:
+  public:
     explicit Producer(const std::string& inputPath);
 
     void run();
 
-private:
+  private:
     std::ifstream input_;
     SharedMemoryChannel memory_;
 };

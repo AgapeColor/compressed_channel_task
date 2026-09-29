@@ -6,7 +6,39 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+option(ENABLE_CLANG_TIDY "Run clang-tidy during build" ON)
+option(ENABLE_CLANG_FORMAT "Add clang-format target" ON)
+
 find_package(Threads REQUIRED)
+
+if(ENABLE_CLANG_TIDY)
+    find_program(CLANG_TIDY_EXE NAMES clang-tidy)
+    if(CLANG_TIDY_EXE)
+        set(CMAKE_CXX_CLANG_TIDY ${CLANG_TIDY_EXE})
+    else()
+        message(WARNING "clang-tidy not found")
+    endif()
+endif()
+
+if(ENABLE_CLANG_FORMAT)
+    find_program(CLANG_FORMAT_EXE NAMES clang-format)
+    if(CLANG_FORMAT_EXE)
+        file(GLOB_RECURSE FORMAT_FILES CONFIGURE_DEPENDS
+            ${CMAKE_SOURCE_DIR}/src/*.cpp
+            ${CMAKE_SOURCE_DIR}/include/*.h
+            ${CMAKE_SOURCE_DIR}/include/*.hpp
+        )
+
+        add_custom_target(format
+            COMMAND ${CLANG_FORMAT_EXE} -i ${FORMAT_FILES}
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            COMMENT "Running clang-format"
+            VERBATIM
+        )
+    else()
+        message(WARNING "clang-format not found")
+    endif()
+endif()
 
 add_executable(producer 
     src/producer.cpp

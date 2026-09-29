@@ -7,8 +7,7 @@
 
 Consumer::Consumer(const std::string& outputPath)
     : memory_("/compressed_channel", SharedMemoryChannel::Mode::Open),
-      output_(outputPath, std::ios::binary | std::ios::trunc)
-{
+      output_(outputPath, std::ios::binary | std::ios::trunc) {
     if (!output_.is_open()) {
         throw std::runtime_error("Cannot open output file: " + outputPath);
     }
@@ -18,17 +17,14 @@ void Consumer::run() {
     std::vector<std::byte> buffer(memory_.payloadCapacity());
 
     while (true) {
-        const auto bytesReceived =
-            memory_.receive(buffer.data(), buffer.size());
+        const auto bytesReceived = memory_.receive(buffer.data(), buffer.size());
 
         if (!bytesReceived.has_value()) {
             break;
         }
 
-        output_.write(
-            reinterpret_cast<const char*>(buffer.data()),
-            static_cast<std::streamsize>(*bytesReceived)
-        );
+        output_.write(reinterpret_cast<const char*>(buffer.data()),
+                      static_cast<std::streamsize>(*bytesReceived));
     }
 
     output_.flush();
@@ -54,8 +50,6 @@ int main(int argc, char* argv[]) {
         std::cerr << "Consumer: " << error.what() << '\n';
         return 1;
     }
-    
+
     return 0;
 }
-
-

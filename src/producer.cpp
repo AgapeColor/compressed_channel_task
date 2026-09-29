@@ -6,40 +6,34 @@
 #include <vector>
 
 namespace {
-    std::ifstream openInputFile(const std::string& path) {
-        std::ifstream input(path, std::ios::binary);
+std::ifstream openInputFile(const std::string& path) {
+    std::ifstream input(path, std::ios::binary);
 
-        if (!input.is_open()) {
-            throw std::runtime_error("Cannot open file: " + path);
-        }
-
-        return input;
+    if (!input.is_open()) {
+        throw std::runtime_error("Cannot open file: " + path);
     }
+
+    return input;
 }
+} // namespace
 
 Producer::Producer(const std::string& inputPath)
     : input_(openInputFile(inputPath)),
-      memory_("/compressed_channel", SharedMemoryChannel::Mode::Create)
-{}
+      memory_("/compressed_channel", SharedMemoryChannel::Mode::Create) {}
 
 void Producer::run() {
     std::vector<std::byte> buffer(memory_.payloadCapacity());
 
     while (true) {
-        input_.read(
-            reinterpret_cast<char*>(buffer.data()),
-            static_cast<std::streamsize>(buffer.size())
-        );
+        input_.read(reinterpret_cast<char*>(buffer.data()),
+                    static_cast<std::streamsize>(buffer.size()));
 
         const auto bytesRead = input_.gcount();
         if (bytesRead == 0) {
             break;
         }
 
-        memory_.send(
-            buffer.data(),
-            static_cast<std::size_t>(bytesRead)
-        );
+        memory_.send(buffer.data(), static_cast<std::size_t>(bytesRead));
     }
 
     const bool readFailed = input_.bad() || (input_.fail() && !input_.eof());

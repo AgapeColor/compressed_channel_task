@@ -7,11 +7,8 @@
 #include <string>
 
 class SharedMemoryChannel {
-public:
-    enum class Mode {
-        Create,
-        Open
-    };
+  public:
+    enum class Mode { Create, Open };
 
     SharedMemoryChannel(const std::string& name, Mode mode);
     ~SharedMemoryChannel();
@@ -29,7 +26,7 @@ public:
 
     void acknowledgeFinished();
 
-private:
+  private:
     void cleanup() noexcept;
 
     std::string name_;
