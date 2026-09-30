@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
-enum class ChannelState : std::uint32_t { Empty, Ready, Finished };
+enum class ChannelState : std::uint32_t { Empty, Ready, Finished, Aborted };
 
 struct SharedChannel {
     std::atomic<ChannelState> state{ChannelState::Empty};

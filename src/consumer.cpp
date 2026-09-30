@@ -9,32 +9,43 @@ Consumer::Consumer(const std::string& outputPath)
     : memory_("/compressed_channel", SharedMemoryChannel::Mode::Open),
       output_(outputPath, std::ios::binary | std::ios::trunc) {
     if (!output_.is_open()) {
-        throw std::runtime_error("Cannot open output file: " + outputPath);
+        memory_.abort();
+        throw std::runtime_error("Consumer::Consumer(): Cannot open output file: " + outputPath);
     }
 }
 
 void Consumer::run() {
-    std::vector<std::byte> buffer(memory_.payloadCapacity());
+    try {
+        std::vector<std::byte> buffer(memory_.payloadCapacity());
 
-    while (true) {
-        const auto bytesReceived = memory_.receive(buffer.data(), buffer.size());
+        while (true) {
+            const auto bytesReceived = memory_.receive(buffer.data(), buffer.size());
 
-        if (!bytesReceived.has_value()) {
-            break;
+            if (!bytesReceived.has_value()) {
+                break;
+            }
+
+            output_.write(reinterpret_cast<const char*>(buffer.data()),
+                        static_cast<std::streamsize>(*bytesReceived));
+        
+            if (!output_) {
+                throw std::runtime_error(
+                    "Consumer::run(): error writing output file");
+            }
         }
 
-        output_.write(reinterpret_cast<const char*>(buffer.data()),
-                      static_cast<std::streamsize>(*bytesReceived));
+        output_.flush();
+
+        if (!output_) {
+            throw std::runtime_error("Consumer::run(): error flushing output file");
+        }
+
+        memory_.acknowledgeFinished();
+    } catch (...) {
+        memory_.abort();
+        throw;
     }
-
-    output_.flush();
-    const bool writeFailed = !output_;
-
-    memory_.acknowledgeFinished();
-
-    if (writeFailed) {
-        throw std::runtime_error("Consumer::run(): error writing output file");
-    }
+    
 }
 
 int main(int argc, char* argv[]) {

@@ -19,15 +19,16 @@ class SharedMemoryChannel {
     std::size_t payloadCapacity() const noexcept;
 
     void send(const std::byte* data, std::size_t size);
-
     std::optional<std::size_t> receive(std::byte* destination, std::size_t capacity);
 
     void finish();
-
     void acknowledgeFinished();
+    void abort() noexcept;
 
   private:
     void cleanup() noexcept;
+    void changeState(ChannelState expected, ChannelState desired);
+    void waitForState(ChannelState desired);
 
     std::string name_;
     int fd_ = -1;

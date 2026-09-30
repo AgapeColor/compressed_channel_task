@@ -58,14 +58,13 @@ void SharedMemoryChannel::send(const std::byte* data, std::size_t size) {
         throw std::length_error("SharedMemoryChannel::send(): payload size is invalid");
     }
 
-    while (channel_->state.load(std::memory_order_acquire) != ChannelState::Empty) {
-        std::this_thread::yield();
-    }
+    waitForState(ChannelState::Empty);
 
     std::memcpy(channel_->data, data, size);
 
     channel_->size = static_cast<std::uint32_t>(size);
-    channel_->state.store(ChannelState::Ready, std::memory_order_release);
+
+    changeState(ChannelState::Empty, ChannelState::Ready);
 }
 
 std::optional<std::size_t> SharedMemoryChannel::receive(std::byte* destination,
@@ -80,6 +79,10 @@ std::optional<std::size_t> SharedMemoryChannel::receive(std::byte* destination,
 
     while (true) {
         const auto state = channel_->state.load(std::memory_order_acquire);
+
+        if (state == ChannelState::Aborted) {
+            throw std::runtime_error("SharedMemoryChannel::receive(): transfer aborted");
+        }
 
         if (state == ChannelState::Finished) {
             return std::nullopt;
@@ -101,33 +104,29 @@ std::optional<std::size_t> SharedMemoryChannel::receive(std::byte* destination,
 
     std::memcpy(destination, channel_->data, size);
 
-    channel_->state.store(ChannelState::Empty, std::memory_order_release);
+    changeState(ChannelState::Ready, ChannelState::Empty);
 
     return size;
 }
 
 void SharedMemoryChannel::finish() {
-    while (channel_->state.load(std::memory_order_acquire) != ChannelState::Empty) {
-        std::this_thread::yield();
-    }
+    waitForState(ChannelState::Empty);
 
-    channel_->state.store(ChannelState::Finished, std::memory_order_release);
+    changeState(ChannelState::Empty, ChannelState::Finished);
 
-    while (channel_->state.load(std::memory_order_acquire) != ChannelState::Empty) {
-        std::this_thread::yield();
-    }
+    waitForState(ChannelState::Empty);
 }
 
 void SharedMemoryChannel::acknowledgeFinished() {
-    channel_->state.store(ChannelState::Empty, std::memory_order_release);
+    changeState(ChannelState::Finished, ChannelState::Empty);
+}
+
+void SharedMemoryChannel::abort() noexcept {
+    channel_->state.store(ChannelState::Aborted, std::memory_order_release);
 }
 
 void SharedMemoryChannel::cleanup() noexcept {
     if (channel_ != nullptr) {
-        if (isOwner_) {
-            channel_->~SharedChannel();
-        }
-
         munmap(channel_, sizeof(SharedChannel));
         channel_ = nullptr;
     }
@@ -140,5 +139,40 @@ void SharedMemoryChannel::cleanup() noexcept {
     if (isOwner_) {
         shm_unlink(name_.c_str());
         isOwner_ = false;
+    }
+}
+
+void SharedMemoryChannel::changeState(ChannelState expected, ChannelState desired) {
+    const bool changed = channel_->state.compare_exchange_strong(
+        expected,
+        desired,
+        std::memory_order_release,
+        std::memory_order_relaxed);
+
+    if (!changed) {
+        if (expected == ChannelState::Aborted) {
+            throw std::runtime_error(
+                "SharedMemoryChannel::changeState(): transfer aborted");
+        }
+
+        throw std::runtime_error(
+            "SharedMemoryChannel::changeState(): unexpected channel state");
+    }
+}
+
+void SharedMemoryChannel::waitForState(ChannelState desired) {
+    while (true) {
+        const auto state = channel_->state.load(std::memory_order_acquire);
+
+        if (state == ChannelState::Aborted) {
+            throw std::runtime_error(
+                "SharedMemoryChannel::waitForState(): transfer aborted");
+        }
+
+        if (state == desired) {
+            return;
+        }
+
+        std::this_thread::yield();
     }
 }
