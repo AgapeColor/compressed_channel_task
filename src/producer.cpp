@@ -23,7 +23,7 @@ Producer::Producer(const std::string& inputPath)
 
 void Producer::run() {
     try {
-        std::vector<std::byte> buffer(memory_.payloadCapacity());
+        std::vector<std::byte> buffer(maxBlockSize);
 
         while (true) {
             input_.read(reinterpret_cast<char*>(buffer.data()),
@@ -34,7 +34,9 @@ void Producer::run() {
                 break;
             }
 
-            memory_.send(buffer.data(), static_cast<std::size_t>(bytesRead));
+            const auto blockSize = static_cast<std::size_t>(bytesRead);
+
+            memory_.sendBlock(buffer.data(), blockSize, blockSize);
         }
 
         const bool readFailed = input_.bad() || (input_.fail() && !input_.eof());

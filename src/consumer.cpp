@@ -16,17 +16,22 @@ Consumer::Consumer(const std::string& outputPath)
 
 void Consumer::run() {
     try {
-        std::vector<std::byte> buffer(memory_.payloadCapacity());
+        std::vector<std::byte> buffer;
+        buffer.reserve(maxBlockSize);
 
         while (true) {
-            const auto bytesReceived = memory_.receive(buffer.data(), buffer.size());
+            const auto header = memory_.receiveBlock(buffer);
 
-            if (!bytesReceived.has_value()) {
+            if (!header.has_value()) {
                 break;
             }
 
+            if (header->encodedSize != header->originalSize) {
+                throw std::runtime_error(
+                    "Consumer::run(): compressed blocks are not supported yet");
+            }
             output_.write(reinterpret_cast<const char*>(buffer.data()),
-                        static_cast<std::streamsize>(*bytesReceived));
+                        static_cast<std::streamsize>(buffer.size()));
         
             if (!output_) {
                 throw std::runtime_error(
