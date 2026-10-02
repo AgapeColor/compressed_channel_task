@@ -59,12 +59,14 @@ add_executable(producer
     src/producer.cpp
     src/shared_memory_channel.cpp
     src/block_codec.cpp
+    src/thread_pool.cpp
 )
 
 add_executable(consumer 
     src/consumer.cpp
     src/shared_memory_channel.cpp
     src/block_codec.cpp
+    src/thread_pool.cpp
 )
 
 foreach(target IN ITEMS producer consumer)

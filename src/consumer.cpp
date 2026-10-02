@@ -1,9 +1,14 @@
 #include "consumer.hpp"
 #include "block_codec.hpp"
+#include "thread_pool.hpp"
 
+#include <deque>
 #include <exception>
+#include <future>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 Consumer::Consumer(const std::string& outputPath)
@@ -17,11 +22,32 @@ Consumer::Consumer(const std::string& outputPath)
 
 void Consumer::run() {
     try {
+        constexpr std::size_t workerCount = 2;
+        constexpr std::size_t maxInFlight = 4;
+
+        std::unique_ptr<ThreadPool> pool;
+        std::deque<std::future<std::vector<std::byte>>> pending;
+
         std::vector<std::byte> buffer;
         buffer.reserve(maxBlockSize);
 
-        std::vector<std::byte> restored;
-        restored.reserve(maxBlockSize);
+        const auto writeBlock = [&](const std::vector<std::byte>& data) {
+            output_.write(
+                reinterpret_cast<const char*>(data.data()),
+                static_cast<std::streamsize>(data.size()));
+
+            if (!output_) {
+                throw std::runtime_error(
+                    "Consumer::run(): error writing output file");
+            }
+        };
+
+        const auto writeNext = [&] {
+            auto block = pending.front().get();
+            pending.pop_front();
+
+            writeBlock(block);
+        };
 
         while (true) {
             const auto header = memory_.receiveBlock(buffer);
@@ -32,20 +58,39 @@ void Consumer::run() {
 
             const bool compressed = header->encodedSize < header->originalSize;
 
+            if (!compressed && pending.empty()) {
+                writeBlock(buffer);
+                continue;
+            }
+
             if (compressed) {
-                BlockCodec::decompress(buffer, header->originalSize, restored);
+                if (!pool) {
+                    pool = std::make_unique<ThreadPool>(workerCount, maxInFlight);
+                }
+
+                auto result = pool->submit(
+                    [data = std::move(buffer), originalSize = header->originalSize] {
+                        std::vector<std::byte> restored;
+                        BlockCodec::decompress(data, originalSize, restored);
+                        return restored;
+                    });
+
+                pending.push_back(std::move(result));
+            } else {
+                // Keep raw blocks behind earlier blocks awaiting decompression.
+                std::promise<std::vector<std::byte>> ready;
+                auto result = ready.get_future();
+                ready.set_value(std::move(buffer));
+                pending.push_back(std::move(result));
             }
 
-            const auto& outputBuffer = compressed ? restored : buffer;
-
-            output_.write(
-                reinterpret_cast<const char*>(outputBuffer.data()),
-                static_cast<std::streamsize>(outputBuffer.size()));
-        
-            if (!output_) {
-                throw std::runtime_error(
-                    "Consumer::run(): error writing output file");
+            if (pending.size() >= maxInFlight) {
+                writeNext();
             }
+        }
+
+        while (!pending.empty()) {
+            writeNext();
         }
 
         output_.flush();
