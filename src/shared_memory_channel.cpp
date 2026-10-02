@@ -83,7 +83,7 @@ void SharedMemoryChannel::sendBlock(const std::byte* data,
         static_cast<std::uint32_t>(encodedSize)
     };
 
-    send(reinterpret_cast<const std::byte*>(&header),sizeof(header));
+    send(reinterpret_cast<const std::byte*>(&header), sizeof(header));
 
     std::size_t offset = 0;
 

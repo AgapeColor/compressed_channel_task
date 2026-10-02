@@ -9,7 +9,22 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(ENABLE_CLANG_TIDY "Run clang-tidy during build" ON)
 option(ENABLE_CLANG_FORMAT "Add clang-format target" ON)
 
+include(FetchContent)
+
+set(LZ4_BUILD_CLI OFF CACHE BOOL "" FORCE)
+set(LZ4_BUNDLED_MODE ON CACHE BOOL "" FORCE)
+
 find_package(Threads REQUIRED)
+
+FetchContent_Declare(
+    lz4
+    GIT_REPOSITORY https://github.com/lz4/lz4.git
+    GIT_TAG v1.10.0
+    GIT_SHALLOW TRUE
+    SOURCE_SUBDIR build/cmake
+)
+
+FetchContent_MakeAvailable(lz4)
 
 if(ENABLE_CLANG_TIDY)
     find_program(CLANG_TIDY_EXE NAMES clang-tidy)
@@ -43,16 +58,18 @@ endif()
 add_executable(producer 
     src/producer.cpp
     src/shared_memory_channel.cpp
+    src/block_codec.cpp
 )
 
 add_executable(consumer 
     src/consumer.cpp
     src/shared_memory_channel.cpp
+    src/block_codec.cpp
 )
 
 foreach(target IN ITEMS producer consumer)
     target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
     target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
     target_link_options(${target} PRIVATE -fuse-ld=lld)
-    target_link_libraries(${target} PRIVATE Threads::Threads)
+    target_link_libraries(${target} PRIVATE Threads::Threads lz4)
 endforeach()

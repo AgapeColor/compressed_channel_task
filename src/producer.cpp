@@ -1,4 +1,5 @@
 #include "producer.hpp"
+#include "block_codec.hpp"
 
 #include <exception>
 #include <iostream>
@@ -24,6 +25,7 @@ Producer::Producer(const std::string& inputPath)
 void Producer::run() {
     try {
         std::vector<std::byte> buffer(maxBlockSize);
+        std::vector<std::byte> compressed;
 
         while (true) {
             input_.read(reinterpret_cast<char*>(buffer.data()),
@@ -36,7 +38,14 @@ void Producer::run() {
 
             const auto blockSize = static_cast<std::size_t>(bytesRead);
 
-            memory_.sendBlock(buffer.data(), blockSize, blockSize);
+            const auto compressedSize = BlockCodec::compress(
+                buffer.data(), blockSize, compressed);
+
+            if (compressedSize < blockSize) {
+                memory_.sendBlock(compressed.data(), compressedSize, blockSize);
+            } else {
+                memory_.sendBlock(buffer.data(), blockSize, blockSize);
+            }
         }
 
         const bool readFailed = input_.bad() || (input_.fail() && !input_.eof());

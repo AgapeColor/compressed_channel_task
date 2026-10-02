@@ -1,4 +1,5 @@
 #include "consumer.hpp"
+#include "block_codec.hpp"
 
 #include <exception>
 #include <iostream>
@@ -19,6 +20,9 @@ void Consumer::run() {
         std::vector<std::byte> buffer;
         buffer.reserve(maxBlockSize);
 
+        std::vector<std::byte> restored;
+        restored.reserve(maxBlockSize);
+
         while (true) {
             const auto header = memory_.receiveBlock(buffer);
 
@@ -26,12 +30,17 @@ void Consumer::run() {
                 break;
             }
 
-            if (header->encodedSize != header->originalSize) {
-                throw std::runtime_error(
-                    "Consumer::run(): compressed blocks are not supported yet");
+            const bool compressed = header->encodedSize < header->originalSize;
+
+            if (compressed) {
+                BlockCodec::decompress(buffer, header->originalSize, restored);
             }
-            output_.write(reinterpret_cast<const char*>(buffer.data()),
-                        static_cast<std::streamsize>(buffer.size()));
+
+            const auto& outputBuffer = compressed ? restored : buffer;
+
+            output_.write(
+                reinterpret_cast<const char*>(outputBuffer.data()),
+                static_cast<std::streamsize>(outputBuffer.size()));
         
             if (!output_) {
                 throw std::runtime_error(
