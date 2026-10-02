@@ -9,7 +9,7 @@ class Producer {
   public:
     explicit Producer(const std::string& inputPath);
 
-    void run();
+    void run(bool useCompression = true);
 
   private:
     std::ifstream input_;
